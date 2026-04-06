@@ -66,7 +66,11 @@ Latest smoke validation on the provided dataset slice:
 - The canonical severe artifacts under `artifacts/smoke_check/lowlight_val_31_severe` and `artifacts/smoke_check/joint_lowlight_dataset_31_severe` were regenerated with the new trainable-severe profile. The older darker versions were preserved as `*_legacy_dark` backups.
 - The latest clean-vs-current-severe detector comparison report was written to `artifacts/smoke_check/evaluation_report_31_severe_current`
 - Dataset audit on `artifacts/smoke_check/labeled_31` flagged `272` low-quality samples and `216` short-run sequence-noise candidates, which supports the hypothesis that the current baseline is being hurt by noisy frame-level labels and weak eye crops
+- A dedicated `clean_labeled_dataset.py` script now turns those audit CSVs into a cleaned labeled-frame copy by removing low-quality samples, short sequence-noise runs, and optional mismatch candidates while preserving folder structure and writing kept/removed manifests
+- On the current real labeled slice, `clean_labeled_dataset.py` reduced `1822` extracted-frame labels to `1333` retained images (`842 closed`, `491 open`), and the resulting balanced clean train/val dataset under `artifacts/smoke_check/dataset_31_cleaned` contains `786` train and `196` validation images
 - Transfer-detector smoke training on a tiny real mini split completed with a ResNet18 backbone, focal loss, threshold tuning, and low-light validation. The mini validation run reached `87.50%` accuracy and `81.25%` closed-eye recall on clean validation, while the matching low-light mini validation remained much harder at `40.62%` accuracy and `50.00%` closed-eye recall. This is only a smoke check, not a full-dataset performance claim.
+- The MRL eye dataset under `data/mrl` was inspected and is directly compatible with the current loader: it contains `84,898` grayscale eye images in `train/val/test` with `open/closed` class folders, and the current pipeline converts them to RGB and resizes them automatically. The current packaged split is image-level rather than subject-level because all `37` subjects appear in train, val, and test
+- `train_transfer_detector.py` has now also been smoke-tested on a balanced MRL subset under `artifacts/smoke_check/mrl_subset`. A 1-epoch ResNet18 transfer-learning run completed end to end and saved checkpoints under `artifacts/smoke_check/mrl_pretrain_smoke`, reaching `57.13%` validation accuracy and `68.80%` F1 on the smoke subset
 - A standalone transfer-detector evaluation script is included for report-ready clean vs low-light comparison, and checkpoint loading has been patched for PyTorch 2.6+ `weights_only=True` compatibility changes
 - The baseline evaluation script now defaults to `num_workers=0` for better compatibility in restricted or sandboxed environments where PyTorch shared-memory workers may be unavailable
 - The transfer-detector trainer now includes a Colab notebook starter, `requirements.txt`, Drive-mount support, runtime-aware relative paths for local-vs-Colab switching, and automatic batch-size fallback on memory pressure
@@ -102,30 +106,31 @@ The current pipeline is:
 2. [`extract_frames.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/extract_frames.py) samples frames from videos and saves cropped eye or upper-face regions.
 3. [`label_eye_state.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/label_eye_state.py) labels the extracted frames as `open` or `closed`.
 4. [`audit_dataset_quality.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/audit_dataset_quality.py) audits the labeled frame dataset for short label flips, low-quality crops, suspicious samples, and per-image statistics before model training.
-5. [`create_balanced_subset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/create_balanced_subset.py) creates a smaller balanced dataset subset by fixed count or percentage per class, preserves folder structure, copies only selected files, and saves a CSV manifest.
-6. [`prepare_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/prepare_dataset.py) balances the classes and builds `train/` and `val/` folders.
-7. [`verify_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/verify_dataset.py) checks folder structure, image validity, class balance, and saves a report.
-8. [`train_baseline.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_baseline.py) trains the baseline CNN classifier and now also exports epoch-wise history JSON for report plots.
-9. [`train_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_transfer_detector.py) trains a stronger transfer-learning detector with augmentation, focal loss, early stopping, scheduler support, threshold tuning for the `closed` class, and Colab-friendly runtime features.
-10. [`generate_lowlight_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/generate_lowlight_dataset.py) creates a degraded low-light version of a dataset split.
-11. [`evaluate.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate.py) compares the trained baseline classifier on clean vs low-light datasets and saves report-ready outputs.
-12. [`evaluate_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_transfer_detector.py) evaluates the stronger transfer-learning detector on clean and low-light datasets using a tuned closed-eye threshold.
-13. [`models/zerodce.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/zerodce.py) provides a Zero-DCE style enhancement network for low-light image enhancement.
-14. [`train_enhancer.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_enhancer.py) trains the enhancer alone on low-light images using the Zero-DCE losses, even when the dataset is stored in `open/closed` folders. It saves `enhancer_best.pt`, `enhancer_last.pt`, and epoch-wise history JSON for report plots.
-15. [`inference_enhancer.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/inference_enhancer.py) and [`visualize_enhancement.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/visualize_enhancement.py) run the enhancer on images and save visual comparisons.
-16. [`models/frozen_detector_pipeline.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/frozen_detector_pipeline.py) provides a reusable `low-light -> enhancer -> frozen detector` pipeline that keeps detector weights frozen and forces detector eval mode.
-17. [`evaluate_enhancer_frozen_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_enhancer_frozen_detector.py) evaluates whether enhancement alone improves low-light detection by comparing raw low-light detector performance against the enhancer-preprocessed version with the same clean-trained detector.
-18. [`analyze_enhancement_recoveries.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/analyze_enhancement_recoveries.py) finds images that the raw low-light detector misses but an enhancement-based path gets right, then saves CSVs and detailed side-by-side visual comparisons for report use.
-19. [`models/joint_model.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/joint_model.py) connects the enhancer and detector into a single differentiable pipeline.
-20. [`train_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_joint.py) trains the full enhancer-detector pipeline on low-light images and now also exports epoch-wise history JSON for report plots.
-21. [`validate_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/validate_joint.py) validates saved joint checkpoints and also provides the reusable validation loop used during training.
-22. [`losses/enhancement_losses.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/enhancement_losses.py) provides the key Zero-DCE loss functions used during enhancement training.
-23. [`losses/focal_loss.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/focal_loss.py) provides focal loss for imbalance-aware transfer-learning detector training.
-24. [`losses/joint_loss.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/joint_loss.py) combines detection and enhancement objectives for end-to-end training.
-25. [`configs/train_config.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/configs/train_config.py) stores tunable joint-training hyperparameters, including the enhancement lambda.
-26. [`generate_report_results.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/generate_report_results.py) generates project-report tables and figures by evaluating baseline, low-light, enhancer-only, and joint-model checkpoints and exporting results into a `results/` folder.
-27. [`notebooks/train_transfer_detector_colab.ipynb`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/notebooks/train_transfer_detector_colab.ipynb) provides a short Colab notebook with the setup cells for Drive mounting, dependency installation, path configuration, training, and evaluation.
-28. [`requirements.txt`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/requirements.txt) lists the core packages needed to run the project locally or in Colab.
+5. [`clean_labeled_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/clean_labeled_dataset.py) removes audit-flagged low-quality images and noisy short sequence runs from a labeled-frame dataset while preserving folder structure and writing kept/removed manifests.
+6. [`create_balanced_subset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/create_balanced_subset.py) creates a smaller balanced dataset subset by fixed count or percentage per class, preserves folder structure, copies only selected files, and saves a CSV manifest.
+7. [`prepare_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/prepare_dataset.py) balances the classes and builds `train/` and `val/` folders.
+8. [`verify_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/verify_dataset.py) checks folder structure, image validity, class balance, and saves a report.
+9. [`train_baseline.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_baseline.py) trains the baseline CNN classifier and now also exports epoch-wise history JSON for report plots.
+10. [`train_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_transfer_detector.py) trains a stronger transfer-learning detector with augmentation, focal loss, early stopping, scheduler support, threshold tuning for the `closed` class, and Colab-friendly runtime features.
+11. [`generate_lowlight_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/generate_lowlight_dataset.py) creates a degraded low-light version of a dataset split.
+12. [`evaluate.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate.py) compares the trained baseline classifier on clean vs low-light datasets and saves report-ready outputs.
+13. [`evaluate_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_transfer_detector.py) evaluates the stronger transfer-learning detector on clean and low-light datasets using a tuned closed-eye threshold.
+14. [`models/zerodce.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/zerodce.py) provides a Zero-DCE style enhancement network for low-light image enhancement.
+15. [`train_enhancer.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_enhancer.py) trains the enhancer alone on low-light images using the Zero-DCE losses, even when the dataset is stored in `open/closed` folders. It saves `enhancer_best.pt`, `enhancer_last.pt`, and epoch-wise history JSON for report plots.
+16. [`inference_enhancer.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/inference_enhancer.py) and [`visualize_enhancement.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/visualize_enhancement.py) run the enhancer on images and save visual comparisons.
+17. [`models/frozen_detector_pipeline.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/frozen_detector_pipeline.py) provides a reusable `low-light -> enhancer -> frozen detector` pipeline that keeps detector weights frozen and forces detector eval mode.
+18. [`evaluate_enhancer_frozen_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_enhancer_frozen_detector.py) evaluates whether enhancement alone improves low-light detection by comparing raw low-light detector performance against the enhancer-preprocessed version with the same clean-trained detector.
+19. [`analyze_enhancement_recoveries.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/analyze_enhancement_recoveries.py) finds images that the raw low-light detector misses but an enhancement-based path gets right, then saves CSVs and detailed side-by-side visual comparisons for report use.
+20. [`models/joint_model.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/models/joint_model.py) connects the enhancer and detector into a single differentiable pipeline.
+21. [`train_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_joint.py) trains the full enhancer-detector pipeline on low-light images and now also exports epoch-wise history JSON for report plots.
+22. [`validate_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/validate_joint.py) validates saved joint checkpoints and also provides the reusable validation loop used during training.
+23. [`losses/enhancement_losses.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/enhancement_losses.py) provides the key Zero-DCE loss functions used during enhancement training.
+24. [`losses/focal_loss.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/focal_loss.py) provides focal loss for imbalance-aware transfer-learning detector training.
+25. [`losses/joint_loss.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/losses/joint_loss.py) combines detection and enhancement objectives for end-to-end training.
+26. [`configs/train_config.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/configs/train_config.py) stores tunable joint-training hyperparameters, including the enhancement lambda.
+27. [`generate_report_results.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/generate_report_results.py) generates project-report tables and figures by evaluating baseline, low-light, enhancer-only, and joint-model checkpoints and exporting results into a `results/` folder.
+28. [`notebooks/train_transfer_detector_colab.ipynb`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/notebooks/train_transfer_detector_colab.ipynb) provides a short Colab notebook with the setup cells for Drive mounting, dependency installation, path configuration, training, and evaluation.
+29. [`requirements.txt`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/requirements.txt) lists the core packages needed to run the project locally or in Colab.
 
 ## Repository Structure
 
@@ -171,6 +176,12 @@ The current pipeline is:
   - Optionally balances class counts by downsampling the larger class.
   - Builds `train/` and `val/` folders.
   - Copies or moves files into a clean training dataset layout.
+
+- [`clean_labeled_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/clean_labeled_dataset.py)
+  - Consumes the CSV outputs from [`audit_dataset_quality.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/audit_dataset_quality.py).
+  - Removes flagged low-quality samples, short sequence-noise runs, and optional mismatch candidates.
+  - Preserves the original labeled-frame folder structure.
+  - Writes `cleaning_report.txt`, `cleaning_kept_files.csv`, and `cleaning_removed_files.csv`.
 
 - [`verify_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/verify_dataset.py)
   - Validates image integrity.
@@ -237,6 +248,7 @@ The current pipeline is:
   - Uses focal loss to handle class imbalance.
   - Applies low-light-oriented augmentation for robustness.
   - Supports `--detector-input-mode raw|enhanced|dual`.
+  - Works directly with packaged datasets such as `data/mrl` because grayscale inputs are converted to RGB by the shared dataset loader and then resized to `224x224`.
   - Can optionally train on enhancer outputs:
     - loads a frozen pretrained enhancer
     - enhances each training image on the fly
