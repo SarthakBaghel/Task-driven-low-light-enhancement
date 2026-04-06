@@ -1,0 +1,50 @@
+# OS metadata
+.DS_Store
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.python-version
+.venv/
+venv/
+env/
+ENV/
+
+# Test and notebook caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ipynb_checkpoints/
+
+# Local editor settings
+.vscode/
+.idea/
+
+# Generated project outputs
+artifacts/
+results/
+checkpoints/
+runs/
+wandb/
+
+# Model exports and logs
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.log
+
+# Matplotlib and font caches
+.matplotlib/
+.cache/
+
+# Datasets and raw data
+data/
+dataset/
+datasets/
