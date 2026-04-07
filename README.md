@@ -509,6 +509,7 @@ The raw dataset is video-based, so the classification pipeline first converts vi
 - removes near-duplicates
 - detects a face region with Haar cascades
 - crops a face, upper-face, or eye-focused region
+- now normalizes comparison sizes when crop dimensions drift slightly between frames, so long videos do not crash during duplicate filtering
 
 This produces compact eye-relevant images instead of full-frame video stills.
 

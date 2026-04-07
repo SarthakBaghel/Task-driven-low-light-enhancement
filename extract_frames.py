@@ -245,6 +245,14 @@ def compute_change_score(
     if previous_saved_gray is None:
         return 1.0
 
+    if previous_saved_gray.shape != current_gray.shape:
+        target_height, target_width = previous_saved_gray.shape[:2]
+        current_gray = cv2.resize(
+            current_gray,
+            (target_width, target_height),
+            interpolation=cv2.INTER_AREA,
+        )
+
     if difference_method == "pixel":
         return float(cv2.absdiff(previous_saved_gray, current_gray).mean() / 255.0)
 
