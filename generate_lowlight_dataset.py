@@ -67,11 +67,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("standard", "severe", "extreme"),
+        choices=("standard", "severe", "realistic_dark", "extreme"),
         default="standard",
         help=(
             "Low-light difficulty preset. 'standard' preserves the current mild "
-            "behavior, while 'severe' and 'extreme' produce much darker images."
+            "behavior, 'severe' stays challenging but recoverable, "
+            "'realistic_dark' targets a darker real-world middle ground, "
+            "and 'extreme' is the harshest stress-test option."
         ),
     )
     parser.add_argument(
@@ -240,6 +242,40 @@ def sample_config(
             "desat_range": (
                 interpolate(0.03, 0.08, strength),
                 interpolate(0.12, 0.28, strength),
+            ),
+        },
+        "realistic_dark": {
+            # Realistic_dark is a middle ground for real-video benchmarking:
+            # noticeably darker than severe, but less likely than extreme to
+            # collapse difficult samples into near-black noise.
+            "gamma": (1.75 + 0.20 * strength, 2.35 + 1.10 * strength),
+            "brightness": (
+                interpolate(0.68, 0.28, strength),
+                interpolate(0.84, 0.56, strength),
+            ),
+            "contrast": (
+                interpolate(0.74, 0.40, strength),
+                interpolate(0.90, 0.66, strength),
+            ),
+            "black_level": (
+                interpolate(0.03, 0.05, strength),
+                interpolate(0.08, 0.14, strength),
+            ),
+            "gaussian_prob": interpolate(0.45, 0.85, strength),
+            "gaussian_range": (
+                interpolate(2.0, 4.0, strength),
+                interpolate(6.0, 12.0, strength),
+            ),
+            "poisson_prob": interpolate(0.45, 0.85, strength),
+            "poisson_range": (
+                interpolate(0.10, 0.18, strength),
+                interpolate(0.28, 0.55, strength),
+            ),
+            "motion_prob": interpolate(0.12, 0.40, strength),
+            "desat_prob": interpolate(0.30, 0.70, strength),
+            "desat_range": (
+                interpolate(0.05, 0.12, strength),
+                interpolate(0.18, 0.45, strength),
             ),
         },
         "extreme": {

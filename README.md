@@ -95,6 +95,10 @@ Latest smoke validation on the provided dataset slice:
 - The latest dual-input smoke comparison was written under `artifacts/smoke_check/dual_input_comparison_smoke`. On the current validation slice, raw low-light reached `48.52%` accuracy / `61.06%` F1, enhancer + original detector reached `47.78%` / `55.52%`, enhancer + fine-tuned detector reached `50.00%` / `65.99%`, and the dual-input detector reached `48.52%` / `62.53%`
 - A dedicated `analyze_enhancement_recoveries.py` script now extracts report-ready examples where raw low-light detection fails but enhancement recovers the sample. On the current larger validation slice, it found `19` recoveries for enhancer + original detector, `101` recoveries for enhancer + fine-tuned detector, and `17` samples recovered by both paths. The CSVs, summary text, contact sheets, and detailed comparison figures were written under `artifacts/smoke_check/recovered_detection_cases_fullslice`
 - A root `.gitignore` is now included for Python caches, notebook checkpoints, generated artifacts, checkpoints, local environment files, and dataset folders such as `data/`, `dataset/`, and `datasets/`
+- Full MRL pretraining has now also been run end to end in Colab with pretrained ResNet18 initialization and Drive-backed checkpoint export. The active initialization checkpoint for real-domain adaptation is `task_driven_checkpoints/mrl_pretrain_full/mrl_transfer_best.pt`
+- Larger real-domain cleaned-frame folders have now been created in Drive from multiple Colab preprocessing passes, including `Fold3_part2/cleaned_31`, `Fold3_part2/cleaned_35`, `Fold4_part1_subject41_video10/cleaned`, and `Fold1_part1_subject01/cleaned`. These were merged into the active real-domain root `task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01`
+- The current bridge fine-tuning run trains the detector directly from that merged `open/closed` root using `--val-ratio 0.2` instead of relying on a separately materialized `train/val` copy. On the current merged clean dataset, the Colab fine-tuning run used `3408` train samples and `851` validation samples, reached best validation `F1 = 0.8692` at epoch `3`, and early-stopped at epoch `8`
+- The current best clean-adapted detector checkpoint is backed up to Drive under `task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt`
 
 Smoke-check artifacts were written under [`artifacts/smoke_check`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/artifacts/smoke_check).
 
@@ -248,6 +252,7 @@ The current pipeline is:
   - Uses focal loss to handle class imbalance.
   - Applies low-light-oriented augmentation for robustness.
   - Supports `--detector-input-mode raw|enhanced|dual`.
+  - Accepts either a predefined `train/val` split or a flat merged `open/closed` root and can create the validation split internally with `--val-ratio`.
   - Works directly with packaged datasets such as `data/mrl` because grayscale inputs are converted to RGB by the shared dataset loader and then resized to `224x224`.
   - Can optionally train on enhancer outputs:
     - loads a frozen pretrained enhancer
@@ -263,6 +268,7 @@ The current pipeline is:
   - Supports runtime-aware relative paths so the same command can be used on a local Mac or in Colab.
   - Can mount Google Drive and copy best/last checkpoints into a Drive backup directory.
   - Saves best and last checkpoints with model config, threshold, and metric history.
+  - Has already been used in Colab for both full MRL pretraining and a merged real-domain clean fine-tuning run initialized from `mrl_transfer_best.pt`.
 
 - [`train_baseline.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_baseline.py)
   - Saves the best baseline checkpoint.
@@ -428,8 +434,8 @@ The current pipeline is:
 - [`generate_lowlight_dataset.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/generate_lowlight_dataset.py)
   - Creates a degraded copy of a dataset.
   - Preserves class structure.
-  - Supports `standard`, `severe`, and `extreme` low-light profiles through `--profile`.
-  - The current `severe` profile is intentionally strong but not near-black; `extreme` is reserved for harsher stress testing.
+  - Supports `standard`, `severe`, `realistic_dark`, and `extreme` low-light profiles through `--profile`.
+  - The current `severe` profile is intentionally strong but not near-black, `realistic_dark` is the new darker middle-ground preset for real-video benchmarking, and `extreme` is reserved for harsher stress testing.
   - Writes a CSV log describing which degradations were applied, including the selected profile and degradation parameters.
 
 ### Zero-DCE Style Enhancement
@@ -556,7 +562,7 @@ For MobileNetV2, the implementation freezes early feature layers and keeps only 
 Instead of evaluating only on clean images, the project also measures robustness under degradation:
 
 - a low-light version of the validation set is generated
-- the degradation pipeline can now be scaled with `--profile standard|severe|extreme`
+- the degradation pipeline can now be scaled with `--profile standard|severe|realistic_dark|extreme`
 - stronger profiles reduce brightness further and crush shadows to create a more meaningful robustness gap
 - the same classifier is evaluated on clean and low-light data
 - metrics are saved to CSV
@@ -564,7 +570,7 @@ Instead of evaluating only on clean images, the project also measures robustness
 
 This makes the evaluation output directly useful for reports and ablation-style comparisons.
 
-On the current smoke subset, the original mild low-light setting produced only a small drop from `59.63%` clean accuracy to `55.93%` low-light accuracy. The first severe profile made the task much harder, but review of real artifacts showed that some images had become too close to near-black noise. The current moderated severe profile still produces a meaningful drop to `52.59%` accuracy and `23.81%` F1 while preserving more recoverable visual structure. The `extreme` profile remains available for harsher stress testing.
+On the current smoke subset, the original mild low-light setting produced only a small drop from `59.63%` clean accuracy to `55.93%` low-light accuracy. The first severe profile made the task much harder, but review of real artifacts showed that some images had become too close to near-black noise. The current moderated severe profile still produces a meaningful drop to `52.59%` accuracy and `23.81%` F1 while preserving more recoverable visual structure. For the newer merged real-video dataset, a new `realistic_dark` profile is included as a middle ground when `severe` is still a bit too easy but `extreme` collapses some frames into near-black noise.
 
 ### 6. Zero-DCE Enhancement
 
@@ -680,11 +686,51 @@ python3 evaluate.py checkpoints/baseline_cnn_best.pt artifacts/dataset \
   --output-dir artifacts/evaluation_report
 ```
 
-The low-light generator supports three presets:
+The low-light generator supports four presets:
 
 - `standard`: mild degradation for a small realism-focused shift
 - `severe`: much darker images with stronger shadow crushing and noise
+- `realistic_dark`: a darker but still usable middle ground between `severe` and `extreme`
 - `extreme`: stress-test setting for very dark synthetic inputs
+
+### B2. Pretrain on MRL and Fine-Tune on the Current Merged Clean Real Dataset
+
+Current merged clean real-domain root used for bridge training:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01`
+
+Current MRL initialization checkpoint:
+
+- `/content/drive/MyDrive/task_driven_checkpoints/mrl_pretrain_full/mrl_transfer_best.pt`
+
+Current Colab fine-tuning command:
+
+```bash
+python3 /content/Task-driven-low-light-enhancement/train_transfer_detector.py \
+  /content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01 \
+  --runtime colab \
+  --backbone resnet18 \
+  --epochs 15 \
+  --batch-size 32 \
+  --num-workers 2 \
+  --learning-rate 1e-4 \
+  --val-ratio 0.2 \
+  --monitor f1 \
+  --threshold-objective f1 \
+  --init-detector-checkpoint /content/drive/MyDrive/task_driven_checkpoints/mrl_pretrain_full/mrl_transfer_best.pt \
+  --save-path artifacts/clean_finetune/mrl_to_clean_best.pt \
+  --save-last-path artifacts/clean_finetune/mrl_to_clean_last.pt \
+  --drive-checkpoint-dir /content/drive/MyDrive/task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01
+```
+
+Observed result on the current merged clean dataset:
+
+- `3408` train samples
+- `851` validation samples
+- best validation `F1 = 0.8692`
+- best epoch `3`
+- early stopping at epoch `8`
+- best checkpoint backup: `/content/drive/MyDrive/task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt`
 
 ### C. Run Zero-DCE Enhancement
 
@@ -774,6 +820,9 @@ Common outputs created by the pipeline:
 - extracted frames: `artifacts/.../extracted_frames`
 - labeled images: `artifacts/.../labeled_*`
 - balanced dataset: `artifacts/.../dataset_*`
+- merged cleaned real-domain roots: `task_driven_video_pipeline/combined_labeled_*`
+- Drive-backed MRL checkpoints: `task_driven_checkpoints/mrl_pretrain_full/*.pt`
+- Drive-backed clean fine-tuning checkpoints: `task_driven_checkpoints/clean_finetune_*/*.pt`
 - dataset verification report: `dataset_report.txt`, `class_counts.png`
 - baseline checkpoint: `*.pt`
 - low-light dataset copy: `lowlight_*`
@@ -794,18 +843,20 @@ Common outputs created by the pipeline:
 - `train_joint.py` and `validate_joint.py` now also pass a real-data mini smoke check on severe low-light images. A full real-dataset epoch on CPU is still slow in this sandbox, so the practical verification here used a smaller real subset for turnaround.
 - `label_eye_state.py` now handles MediaPipe API differences, but the `mediapipe-tasks` path requires a Face Landmarker `.task` file if you want to use that backend explicitly.
 - The OpenCV Haar fallback is less semantically precise than landmark-based EAR labeling, but it makes the pipeline runnable in environments where the old MediaPipe Face Mesh API is unavailable.
-- The first low-light simulation was too mild for the project objective. The current pipeline now includes stronger `severe` and `extreme` degradation profiles, which better expose the classifier's weakness under dark conditions.
-- `extreme` is useful as a stress test, but it may be unrealistically dark for the final report. The `severe` preset was adjusted after artifact review so it remains challenging without collapsing as many samples into near-black noise.
+- For real videos with short blinks or brief closures, sparse extraction intervals such as `2.0s` miss many useful `closed` examples. The current better-performing Colab preprocessing runs used denser extraction such as `0.5s`
+- The first low-light simulation was too mild for the project objective. The current pipeline now includes stronger `severe`, `realistic_dark`, and `extreme` degradation profiles, which better expose the classifier's weakness under dark conditions.
+- `extreme` is useful as a stress test, but it may be unrealistically dark for the final report. The `severe` preset was adjusted after artifact review so it remains challenging without collapsing as many samples into near-black noise, and the new `realistic_dark` preset sits between those two options for darker but still recoverable real-video benchmarking.
 - In this sandbox, MobileNetV2 pretrained weights could not be downloaded because external network access is restricted. The code is set up to use pretrained weights when available and falls back safely for local offline smoke tests.
 - Joint training intentionally uses raw `[0, 1]` image tensors for Zero-DCE compatibility. If you later rely heavily on pretrained MobileNetV2, it may be worth experimenting with a detector-side normalization step after enhancement.
 - Zero-DCE inference is implemented and working, but meaningful enhancement quality depends on training the model and providing a trained checkpoint.
+- `prepare_dataset.py` is still useful when you explicitly want a materialized `train/val` folder tree, but the current Colab bridge-training workflow is simpler and more robust when `train_transfer_detector.py` is pointed directly at a merged `open/closed` root with `--val-ratio`
 
 ## Recommended Next Steps
 
-- Run the repaired dataset-preparation pipeline across all raw videos, not just the smoke-check subset.
-- Regenerate the full degraded dataset with `--profile severe` and use it as the main low-light benchmark.
-- Train the baseline classifier for more epochs and inspect confusion-matrix trends across clean, severe low-light, and enhanced images.
+- Evaluate the saved clean-adapted transfer checkpoint `task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt` on clean and degraded validation sets and use it as the bridge model for the next experiments.
+- Generate the low-light version of the current merged real-domain validation data with the new `realistic_dark` preset first, then quantify how much performance drops from the clean `F1 = 0.8692` baseline.
+- Continue expanding the merged clean real-domain root, but prioritize subjects and videos that still retain a meaningful number of `closed` images after audit and cleaning.
 - Train the Zero-DCE model with the implemented enhancement losses.
 - Run [`train_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_joint.py) on the real severe low-light dataset and compare checkpoints across different lambda values.
 - Use [`validate_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/validate_joint.py) to compare the best joint checkpoints against the baseline detector.
-- Re-evaluate classifier robustness after applying trained enhancement before classification.
+- Re-evaluate classifier robustness after applying trained enhancement before classification and compare raw, enhanced, and dual-input detector branches against the same low-light split.
