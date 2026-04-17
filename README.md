@@ -99,8 +99,68 @@ Latest smoke validation on the provided dataset slice:
 - Larger real-domain cleaned-frame folders have now been created in Drive from multiple Colab preprocessing passes, including `Fold3_part2/cleaned_31`, `Fold3_part2/cleaned_35`, `Fold4_part1_subject41_video10/cleaned`, and `Fold1_part1_subject01/cleaned`. These were merged into the active real-domain root `task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01`
 - The current bridge fine-tuning run trains the detector directly from that merged `open/closed` root using `--val-ratio 0.2` instead of relying on a separately materialized `train/val` copy. On the current merged clean dataset, the Colab fine-tuning run used `3408` train samples and `851` validation samples, reached best validation `F1 = 0.8692` at epoch `3`, and early-stopped at epoch `8`
 - The current best clean-adapted detector checkpoint is backed up to Drive under `task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt`
+- A matched `realistic_dark 0.9` low-light benchmark has now also been generated from the same merged clean root, together with a matched clean subset for fair clean-vs-low-light comparison
+- On that benchmark, the clean detector kept `95.75%` accuracy / `86.34%` F1 on the matched clean subset, but dropped to `47.99%` accuracy / `33.38%` F1 on raw low-light images
+- The current `enhancer + original detector` branch did not help on this benchmark and fell further to `16.18%` accuracy / `26.30%` F1, which is the correct outcome to report for a frozen clean detector under a strong low-light shift
+- Adapting the detector to enhancement-aware low-light inputs recovers performance strongly: `enhancer + fine-tuned detector` reached `91.66%` accuracy / `72.33%` F1 and the `dual input detector` reached the best low-light result so far at `92.25%` accuracy / `74.30%` F1
+- The main low-light conclusion from that original matched benchmark is therefore no longer "enhancement alone helps", but rather "task-aware detector adaptation is necessary, and the best branch on that benchmark is the dual-input detector that sees both raw and enhanced images"
+- Additional cleaned real-domain subjects from `Fold2_part1` have now been processed and merged into an expanded root `task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01_plus_f2p1`, together with a new matched `realistic_dark 0.9` benchmark under `lowlight_keep31_35_41v10_f1s01_plus_f2p1_realistic_dark_090`
+- The previously trained checkpoints were then evaluated on this harder expanded benchmark before retraining. On the matched clean subset, the old clean detector dropped to `81.80%` accuracy / `81.47%` F1. On the new low-light subset, the old raw detector reached `61.30%` accuracy / `70.79%` F1, `enhancer + original detector` reached `51.10%` / `66.11%`, `enhancer + fine-tuned detector` reached `58.30%` / `67.57%`, and the old `dual input detector` reached `67.17%` accuracy / `69.55%` F1
+- The expanded `plus_f2p1` evaluation therefore behaves like a harder unseen-subject generalization check: the earlier in-domain 4-way ranking does not transfer cleanly, the old raw detector now has the best F1, and the old dual-input branch keeps the best accuracy / precision but loses recall. This is now the clearest justification for retraining on the expanded dataset rather than relying only on the earlier matched benchmark
+- A random expanded clean subset `task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01_plus_f2p1_subset4292_open2300_closed1992` was then created to keep Colab retraining practical while preserving all `1992` available `closed` images and a slightly larger `open` pool of `2300`
+- After retraining on that subset and re-running the 4-way benchmark on the expanded `plus_f2p1` low-light root, the clean detector reached `95.37%` accuracy / `95.42%` F1 on the matched clean subset. On low-light images, raw low-light reached `72.00%` accuracy / `77.12%` F1, `enhancer + original detector` reached `52.33%` / `67.17%`, `enhancer + fine-tuned detector` reached the best result at `89.30%` accuracy / `89.71%` F1, and the retrained `dual input detector` reached `81.70%` accuracy / `83.59%` F1
+- The expanded retrained benchmark therefore restores the main qualitative story: naive preprocessing still hurts, but once the detector is adapted to the expanded domain, enhancement-aware training works well again. On this specific subset-driven benchmark, `enhancer + fine-tuned detector` is now the strongest branch, with the dual-input detector as the second-best low-light model
 
 Smoke-check artifacts were written under [`artifacts/smoke_check`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/artifacts/smoke_check).
+
+## Kaggle V1 Restart Status
+
+The project is now also being restarted on a separate Kaggle-based dataset track so the next round of experiments can use a cleaner eye-crop source and proper subject-wise splitting from the beginning.
+
+Completed so far:
+
+- **Phase 0 completed**: the Kaggle dataset `kutaykutlu/drowsiness-detection` was downloaded in Colab, extracted into Drive under `task_driven_video_pipeline/kaggle_v1`, and canonicalized into a clean root at `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/raw_clean` with `open/` and `closed/` folders.
+- **Phase 1 completed**: a dataset audit and split-planning notebook was run on the new Kaggle root, and the active Phase 1 flow now works from a balanced subset manifest rather than the full raw copy.
+- The current Phase 1 notebook does not relabel images. Instead, it audits filename-derived subject IDs, unreadable files, per-subject class coverage, image-size variation, and the subject-wise train/val/test split configuration.
+- The current working Phase 1 run uses a balanced subject/class-aware 20k manifest saved under `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/audit/manifest_subject_class_balanced_20k.csv`.
+- The corresponding audit and split artifacts currently include:
+  - `manifest_subject_class_balanced_20k.csv`
+  - `manifest_subject_class_balanced_20k_subject_summary.csv`
+  - `class_counts_subject_class_balanced_20k.csv`
+  - `subject_summary_subject_class_balanced_20k.csv`
+  - `image_size_distribution_subject_class_balanced_20k.csv`
+  - `manifest_with_split_subject_class_balanced_20k.csv`
+  - `split_class_counts_subject_class_balanced_20k.csv`
+  - `split_config_subject_class_balanced_20k.json`
+- This Kaggle track is intentionally separate from the earlier video-derived `Fold*` pipeline. For Kaggle v1, the old `extract_frames.py`, `label_eye_state.py`, and frame-cleaning notebooks are not part of the main path because the dataset already arrives as eye crops grouped into `open` and `closed`.
+- **Phase 2 completed**: the subject-wise split from `manifest_with_split_subject_class_balanced_20k.csv` was materialized into the following clean roots:
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/train_clean_subject_class_balanced_20k`
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/val_clean_subject_class_balanced_20k`
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/test_clean_subject_class_balanced_20k`
+- The corresponding Phase 2 materialization artifacts now include:
+  - `materialized_split_manifest_subject_class_balanced_20k.csv`
+  - `materialized_split_counts_subject_class_balanced_20k.csv`
+  - `materialized_split_subject_counts_subject_class_balanced_20k.csv`
+- **Phase 3 completed**: a reduced pilot training run was created from a subset of train subjects only, while the full validation split was kept for early evaluation. This pilot used a ResNet18 clean detector and wrote checkpoints under `task_driven_checkpoints/kaggle_v1/pilot_clean_detector_subject_class_balanced_20k_resnet18`.
+- The pilot clean run confirmed that the new Kaggle split is learnable with the current transfer-learning stack. On `val_clean_subject_class_balanced_20k`, the pilot detector reached `96.76%` accuracy / `96.78%` F1. On `test_clean_subject_class_balanced_20k`, it reached `91.94%` accuracy / `92.43%` F1, which is a healthy subject-wise generalization result for the first clean-only sanity check.
+- **Phase 4 active path**: the full clean detector notebook now targets all of `train_clean_subject_class_balanced_20k`, validates on `val_clean_subject_class_balanced_20k`, and evaluates on `test_clean_subject_class_balanced_20k`, with checkpoints stored under `task_driven_checkpoints/kaggle_v1/full_clean_detector_subject_class_balanced_20k_resnet18`.
+- **Phase 5 completed / active low-light preset**: low-light generation for the Kaggle v1 split now uses a custom eye-crop-aware preset called `eye_mid` instead of the earlier harsher `realistic_dark` settings. The selected configuration is:
+  - `gamma=1.75`
+  - `brightness_factor=0.72`
+  - `contrast_factor=0.84`
+  - `black_level_shift=0.02`
+  - `gaussian_sigma=1.5`
+  - `poisson_strength=0.08`
+  - `motion_blur_kernel=0`
+  - `motion_blur_angle=0.0`
+  - `desaturation_factor=0.00`
+- The corresponding planned low-light roots are:
+- The corresponding Kaggle v1 low-light roots are:
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/train_lowlight_subject_class_balanced_20k_eye_mid`
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/val_lowlight_subject_class_balanced_20k_eye_mid`
+  - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/test_lowlight_subject_class_balanced_20k_eye_mid`
+- The next planned step is **Phase 6**: run the clean-vs-low-light baseline on the Kaggle v1 clean detector using `test_clean_subject_class_balanced_20k` and `test_lowlight_subject_class_balanced_20k_eye_mid` to measure the first true clean-to-low-light degradation gap on the new dataset.
+- For faster and more restart-friendly Kaggle v1 baseline checks, [`evaluate_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_transfer_detector.py) now supports a balanced subset cap via `--max-total-samples`, tqdm progress bars by default, saves a `subset_manifest.csv`, and writes clean-only partial outputs before the low-light pass starts.
 
 ## Project Flow
 
@@ -355,6 +415,7 @@ The current pipeline is:
     - `metric_comparison.png`
     - `evaluation_summary.txt`
   - This is the direct answer to the question: "does enhancement alone improve low-light detection if the detector itself stays fixed?"
+  - On the current full `realistic_dark 0.9` benchmark, the answer is "no" for the frozen clean detector path: raw low-light reached `47.99%` accuracy / `33.38%` F1, while `enhancer + original detector` reached `16.18%` / `26.30%`. The same evaluation also shows that adaptation matters: `enhancer + fine-tuned detector` recovered to `91.66%` / `72.33%`, and the `dual input detector` is currently best at `92.25%` / `74.30%`.
 
 ### Colab Helpers
 
@@ -732,6 +793,151 @@ Observed result on the current merged clean dataset:
 - early stopping at epoch `8`
 - best checkpoint backup: `/content/drive/MyDrive/task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt`
 
+### B3. Generate the Current Realistic-Dark Benchmark and Run the 4-Way Comparison
+
+Current low-light benchmark root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/lowlight_keep31_35_41v10_f1s01_realistic_dark_090`
+
+Current matched clean subset root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/clean_matched_keep31_35_41v10_f1s01_realistic_dark_090`
+
+Evaluation provenance for this benchmark:
+
+- the low-light subset was generated from the merged clean real-domain root `/content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01`
+- the matched clean subset was reconstructed from the same sampled files using the low-light generator's `degradation_log.csv`
+- the 4-way evaluation therefore compares matched clean and low-light versions of the same sampled image pool
+- this benchmark is an in-domain matched evaluation, not a separately materialized held-out subject-independent `test/` split
+
+Current main comparison report root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/eval_4way_realistic_dark_090`
+
+Generate a `realistic_dark 0.9` low-light subset:
+
+```bash
+python3 /content/Task-driven-low-light-enhancement/generate_lowlight_dataset.py \
+  --input-dir /content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01 \
+  --output-dir /content/drive/MyDrive/task_driven_video_pipeline/lowlight_keep31_35_41v10_f1s01_realistic_dark_090 \
+  --num-samples 2000 \
+  --profile realistic_dark \
+  --strength 0.9 \
+  --seed 42 \
+  --report-every 100
+```
+
+Run the 4-way evaluation:
+
+```bash
+python3 /content/Task-driven-low-light-enhancement/evaluate_enhancer_frozen_detector.py \
+  /content/drive/MyDrive/task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt \
+  /content/drive/MyDrive/task_driven_checkpoints/enhancer_realistic_dark_090/enhancer_best.pt \
+  /content/drive/MyDrive/task_driven_video_pipeline/lowlight_keep31_35_41v10_f1s01_realistic_dark_090 \
+  --enhanced-detector-checkpoint /content/drive/MyDrive/task_driven_checkpoints/detector_enhanced_realistic_dark_090/detector_enhanced_best.pt \
+  --dual-detector-checkpoint /content/drive/MyDrive/task_driven_checkpoints/detector_dual_realistic_dark_090/detector_dual_best.pt \
+  --clean-root /content/drive/MyDrive/task_driven_video_pipeline/clean_matched_keep31_35_41v10_f1s01_realistic_dark_090 \
+  --retune-threshold-on-clean \
+  --threshold-candidates 0.3 0.4 0.5 0.6 0.7 \
+  --batch-size 64 \
+  --num-workers 2 \
+  --output-dir /content/drive/MyDrive/task_driven_video_pipeline/eval_4way_realistic_dark_090
+```
+
+Observed 4-way result on the current benchmark:
+
+- `Original Detector` on `Clean`: `95.75%` accuracy, `86.34%` F1
+- `Original Detector` on `Low-light`: `47.99%` accuracy, `33.38%` F1
+- `Enhancer + Original Detector` on `Low-light`: `16.18%` accuracy, `26.30%` F1
+- `Enhancer + Fine-tuned Detector` on `Low-light`: `91.66%` accuracy, `72.33%` F1
+- `Dual Input Detector` on `Low-light`: `92.25%` accuracy, `74.30%` F1
+
+Current takeaway:
+
+- low light causes a severe domain shift for the clean detector
+- enhancement alone is not sufficient when the detector stays frozen
+- enhancement becomes useful once the detector is adapted to the enhanced domain
+- the best current low-light branch is the dual-input detector that uses both raw and enhanced images
+- this result should currently be described as a matched in-domain benchmark on samples drawn from the merged cleaned dataset, not as a final held-out generalization result
+
+### B4. Evaluate the Old Checkpoints on the Expanded `plus_f2p1` Benchmark
+
+Expanded clean root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01_plus_f2p1`
+
+Expanded low-light benchmark root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/lowlight_keep31_35_41v10_f1s01_plus_f2p1_realistic_dark_090`
+
+Expanded matched clean subset root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/clean_matched_keep31_35_41v10_f1s01_plus_f2p1_realistic_dark_090`
+
+Generalization-focused report roots:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/eval_raw_clean_vs_lowlight_realistic_dark_090_old_models_on_plus_f2p1`
+- `/content/drive/MyDrive/task_driven_video_pipeline/eval_4way_realistic_dark_090_old_models_on_plus_f2p1`
+
+This pass intentionally reused the older checkpoints trained on `combined_labeled_keep31_35_41v10_f1s01` and evaluated them on the expanded `plus_f2p1` clean / low-light benchmark **before** any retraining. That makes it a better approximation of unseen-subject transfer than the earlier in-domain matched benchmark.
+
+Observed result with the old checkpoints on `plus_f2p1`:
+
+- `Original Detector` on `Clean`: `81.80%` accuracy, `81.47%` F1
+- `Original Detector` on `Low-light`: `61.30%` accuracy, `70.79%` F1
+- `Enhancer + Original Detector` on `Low-light`: `51.10%` accuracy, `66.11%` F1
+- `Enhancer + Fine-tuned Detector` on `Low-light`: `58.30%` accuracy, `67.57%` F1
+- `Dual Input Detector` on `Low-light`: `67.17%` accuracy, `69.55%` F1
+
+Current takeaway from the expanded benchmark:
+
+- the new subjects are meaningfully harder, because clean performance already drops from the earlier matched benchmark
+- the old enhancement-aware branches do not transfer as cleanly to the new subjects as they did on the original in-domain matched benchmark
+- on the new low-light subset, the old raw detector currently gives the best F1 because it retains very high recall
+- the old dual-input branch still gives the best accuracy / precision, but it loses enough recall that its F1 falls slightly below the raw old detector
+- this is the strongest current evidence that the next iteration should retrain the clean, enhancer, enhanced-detector, and dual-input branches on the expanded dataset rather than only reporting the earlier in-domain result
+
+### B5. Retrain on the Expanded `plus_f2p1` Subset and Re-run the 4-Way Comparison
+
+Expanded clean training subset:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/combined_labeled_keep31_35_41v10_f1s01_plus_f2p1_subset4292_open2300_closed1992`
+
+Expanded retrained checkpoint roots:
+
+- clean detector: `/content/drive/MyDrive/task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01_plus_f2p1_subset4292/clean_plus_f2p1_subset4292_best.pt`
+- enhancer: `/content/drive/MyDrive/task_driven_checkpoints/enhancer_realistic_dark_090_plus_f2p1_subset4292/enhancer_best.pt`
+- enhanced detector: `/content/drive/MyDrive/task_driven_checkpoints/detector_enhanced_realistic_dark_090_plus_f2p1_subset4292/detector_enhanced_plus_f2p1_subset4292_best.pt`
+- dual detector: `/content/drive/MyDrive/task_driven_checkpoints/detector_dual_realistic_dark_090_plus_f2p1_subset4292/detector_dual_plus_f2p1_subset4292_best.pt`
+
+Expanded retrained report root:
+
+- `/content/drive/MyDrive/task_driven_video_pipeline/eval_4way_realistic_dark_090_plus_f2p1_subset4292_retrained`
+
+This pass uses a practical random training subset from the expanded clean root:
+
+- `2300 open`
+- `1992 closed`
+- total `4292`
+
+The clean detector is warm-started from the older clean checkpoint, the enhancer is retrained fresh on the expanded low-light root, and the enhanced / dual detectors are then trained from the new clean detector checkpoint.
+
+Observed retrained 4-way result on the expanded benchmark:
+
+- `Original Detector` on `Clean`: `95.37%` accuracy, `95.42%` F1
+- `Original Detector` on `Low-light`: `72.00%` accuracy, `77.12%` F1
+- `Enhancer + Original Detector` on `Low-light`: `52.33%` accuracy, `67.17%` F1
+- `Enhancer + Fine-tuned Detector` on `Low-light`: `89.30%` accuracy, `89.71%` F1
+- `Dual Input Detector` on `Low-light`: `81.70%` accuracy, `83.59%` F1
+
+Current takeaway from the retrained expanded benchmark:
+
+- retraining on the expanded dataset fixes most of the transfer collapse seen with the older checkpoints
+- `enhancer + original detector` still underperforms the raw low-light detector, so naive preprocessing is still not a valid success story
+- `enhancer + fine-tuned detector` is now the strongest branch on this expanded subset benchmark by accuracy, precision, recall, and F1
+- the retrained dual-input branch remains strong, but on this subset it is second-best rather than first
+- because both the training subset and the matched clean / low-light evaluation roots are drawn from the same expanded image pool, this should still be described as an expanded in-domain adaptation benchmark rather than a final disjoint held-out test
+
 ### C. Run Zero-DCE Enhancement
 
 Enhance a single image:
@@ -846,6 +1052,10 @@ Common outputs created by the pipeline:
 - For real videos with short blinks or brief closures, sparse extraction intervals such as `2.0s` miss many useful `closed` examples. The current better-performing Colab preprocessing runs used denser extraction such as `0.5s`
 - The first low-light simulation was too mild for the project objective. The current pipeline now includes stronger `severe`, `realistic_dark`, and `extreme` degradation profiles, which better expose the classifier's weakness under dark conditions.
 - `extreme` is useful as a stress test, but it may be unrealistically dark for the final report. The `severe` preset was adjusted after artifact review so it remains challenging without collapsing as many samples into near-black noise, and the new `realistic_dark` preset sits between those two options for darker but still recoverable real-video benchmarking.
+- Current real-data benchmarks confirm that a stronger low-light preset by itself is not enough to justify the enhancement path. On every current `realistic_dark 0.9` benchmark, `enhancer + original detector` underperforms the raw low-light detector, so the robust conclusion is still that detector adaptation matters. The strongest branch depends on the benchmark: the earlier matched benchmark favors the dual-input detector, while the expanded retrained `plus_f2p1_subset4292` benchmark favors `enhancer + fine-tuned detector`.
+- The current 4-way evaluation does not use a separate held-out `test/` split. Instead, it uses a matched clean subset and its generated low-light counterpart sampled from the merged clean real-domain root. This is strong enough for the current project benchmark, but it should be described as an in-domain matched evaluation rather than subject-independent held-out testing.
+- The expanded `plus_f2p1` evaluation is a better generalization check because it reuses the older checkpoints on newly added subjects before retraining. On that harder benchmark, the old enhancement-aware branches degrade noticeably, which means the earlier strong in-domain result should not be overgeneralized to unseen subjects.
+- The retrained `plus_f2p1_subset4292` benchmark is stronger than the older transfer-only check, but it is still not a fully disjoint test because the training subset and the matched evaluation roots come from the same expanded subject pool. It should be reported as an expanded in-domain adaptation result, not as final subject-independent generalization.
 - In this sandbox, MobileNetV2 pretrained weights could not be downloaded because external network access is restricted. The code is set up to use pretrained weights when available and falls back safely for local offline smoke tests.
 - Joint training intentionally uses raw `[0, 1]` image tensors for Zero-DCE compatibility. If you later rely heavily on pretrained MobileNetV2, it may be worth experimenting with a detector-side normalization step after enhancement.
 - Zero-DCE inference is implemented and working, but meaningful enhancement quality depends on training the model and providing a trained checkpoint.
@@ -853,10 +1063,13 @@ Common outputs created by the pipeline:
 
 ## Recommended Next Steps
 
-- Evaluate the saved clean-adapted transfer checkpoint `task_driven_checkpoints/clean_finetune_keep31_35_41v10_f1s01/mrl_to_clean_best.pt` on clean and degraded validation sets and use it as the bridge model for the next experiments.
-- Generate the low-light version of the current merged real-domain validation data with the new `realistic_dark` preset first, then quantify how much performance drops from the clean `F1 = 0.8692` baseline.
+- Keep all three benchmark stories in the report: the original matched in-domain `realistic_dark 0.9` result, the harder `plus_f2p1` transfer result with old checkpoints on newly added subjects, and the retrained `plus_f2p1_subset4292` adaptation result.
+- Create a truly held-out subject-level evaluation split next so the final report can separate expanded in-domain adaptation from real unseen-subject generalization.
 - Continue expanding the merged clean real-domain root, but prioritize subjects and videos that still retain a meaningful number of `closed` images after audit and cleaning.
+- Because the clean pool currently contains only about `1992` usable `closed` images, keep all `closed` examples when building practical subsets and only downsample `open`. If you want to use more of the `open` pool without throwing it away statically, the next experiment should use weighted sampling or a balanced batch sampler rather than a fixed subset.
+- If closed-eye sensitivity remains the main target metric, keep reporting both F1 and `closed_recall`, and consider using `--threshold-objective recall` or a denser threshold sweep for operating-point selection on the expanded validation split.
+- Once the held-out split exists, repeat the current 4-way comparison there before drawing final conclusions about whether `enhancer + fine-tuned detector` or `dual input detector` is the strongest branch overall.
 - Train the Zero-DCE model with the implemented enhancement losses.
 - Run [`train_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/train_joint.py) on the real severe low-light dataset and compare checkpoints across different lambda values.
 - Use [`validate_joint.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/validate_joint.py) to compare the best joint checkpoints against the baseline detector.
-- Re-evaluate classifier robustness after applying trained enhancement before classification and compare raw, enhanced, and dual-input detector branches against the same low-light split.
+- Keep the current `enhancer + fine-tuned detector` and `dual-input detector` as the main non-joint branches to beat going forward: the former is strongest on the retrained expanded subset benchmark, while the latter remains strongest on the earlier matched benchmark and strongest by accuracy / precision on the old-model transfer check.

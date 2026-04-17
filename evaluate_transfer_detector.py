@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import csv
 from pathlib import Path
+import random
 
 import matplotlib
 matplotlib.use("Agg")
@@ -19,6 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from dataset import EyeStateDataset
 from losses.focal_loss import FocalLoss
@@ -48,6 +50,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument(
+        "--max-total-samples",
+        type=int,
+        default=0,
+        help=(
+            "Optional balanced subset cap across all classes. "
+            "For example, 5000 evaluates about 2500 open + 2500 closed samples."
+        ),
+    )
+    parser.add_argument(
+        "--subset-seed",
+        type=int,
+        default=42,
+        help="Random seed used when sampling a balanced evaluation subset.",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable tqdm progress bars during evaluation.",
+    )
     parser.add_argument(
         "--retune-threshold-on-clean",
         action="store_true",
@@ -91,15 +113,11 @@ def load_checkpoint(path: str | Path) -> dict:
 
 
 def create_loader(
-    dataset_root: str | Path,
+    dataset: EyeStateDataset,
     *,
-    class_to_idx: dict[str, int],
     batch_size: int,
     num_workers: int,
-    image_size: int,
-) -> tuple[EyeStateDataset, DataLoader]:
-    _, val_transform = build_transfer_learning_transforms(image_size=image_size)
-    dataset = EyeStateDataset(root=dataset_root, class_to_idx=class_to_idx, transform=val_transform)
+) -> DataLoader:
     loader = DataLoader(
         dataset,
         batch_size=batch_size,
@@ -108,7 +126,111 @@ def create_loader(
         pin_memory=torch.cuda.is_available(),
         persistent_workers=num_workers > 0,
     )
-    return dataset, loader
+    return loader
+
+
+def build_dataset(
+    dataset_root: str | Path,
+    *,
+    class_to_idx: dict[str, int],
+    image_size: int,
+) -> EyeStateDataset:
+    _, val_transform = build_transfer_learning_transforms(image_size=image_size)
+    return EyeStateDataset(root=dataset_root, class_to_idx=class_to_idx, transform=val_transform)
+
+
+def sample_balanced_subset(
+    dataset: EyeStateDataset,
+    *,
+    max_total_samples: int,
+    subset_seed: int,
+) -> tuple[EyeStateDataset, list[dict[str, object]], dict[str, int]]:
+    if max_total_samples <= 0:
+        manifest_rows = []
+        for image_path, label in dataset.samples:
+            class_name = dataset.classes[int(label)]
+            relative_path = image_path.relative_to(dataset.root / class_name).as_posix()
+            manifest_rows.append(
+                {
+                    "class_name": class_name,
+                    "label": int(label),
+                    "relative_path": relative_path,
+                }
+            )
+        counts = {class_name: dataset.get_class_distribution().get(class_name, 0) for class_name in dataset.classes}
+        return dataset, manifest_rows, counts
+
+    rng = random.Random(subset_seed)
+    grouped_samples: dict[int, list[tuple[Path, int]]] = {index: [] for index in range(len(dataset.classes))}
+    for sample in dataset.samples:
+        grouped_samples[int(sample[1])].append(sample)
+
+    base_per_class = max_total_samples // max(len(dataset.classes), 1)
+    remainder = max_total_samples % max(len(dataset.classes), 1)
+
+    subset_samples: list[tuple[Path, int]] = []
+    manifest_rows: list[dict[str, object]] = []
+    class_counts: dict[str, int] = {}
+
+    for class_offset, class_name in enumerate(dataset.classes):
+        class_index = dataset.class_to_idx[class_name]
+        class_samples = list(grouped_samples.get(class_index, []))
+        rng.shuffle(class_samples)
+
+        requested = base_per_class + (1 if class_offset < remainder else 0)
+        chosen_samples = class_samples[:requested]
+        chosen_samples = sorted(chosen_samples, key=lambda sample: str(sample[0]))
+
+        class_counts[class_name] = len(chosen_samples)
+        subset_samples.extend(chosen_samples)
+
+        for image_path, label in chosen_samples:
+            relative_path = image_path.relative_to(dataset.root / class_name).as_posix()
+            manifest_rows.append(
+                {
+                    "class_name": class_name,
+                    "label": int(label),
+                    "relative_path": relative_path,
+                }
+            )
+
+    subset_dataset = EyeStateDataset(
+        samples=subset_samples,
+        class_to_idx=dataset.class_to_idx,
+        transform=dataset.transform,
+    )
+    return subset_dataset, manifest_rows, class_counts
+
+
+def build_dataset_from_manifest(
+    dataset_root: str | Path,
+    *,
+    manifest_rows: list[dict[str, object]],
+    class_to_idx: dict[str, int],
+    image_size: int,
+) -> EyeStateDataset:
+    root_path = Path(dataset_root).expanduser().resolve()
+    _, val_transform = build_transfer_learning_transforms(image_size=image_size)
+
+    samples: list[tuple[Path, int]] = []
+    missing_paths: list[Path] = []
+    for row in manifest_rows:
+        class_name = str(row["class_name"])
+        relative_path = Path(str(row["relative_path"]))
+        image_path = root_path / class_name / relative_path
+        if not image_path.is_file():
+            missing_paths.append(image_path)
+            continue
+        samples.append((image_path, int(class_to_idx[class_name])))
+
+    if missing_paths:
+        preview = "\n".join(str(path) for path in missing_paths[:10])
+        raise FileNotFoundError(
+            "Some low-light samples are missing for the chosen clean subset.\n"
+            f"First missing paths:\n{preview}"
+        )
+
+    return EyeStateDataset(samples=samples, class_to_idx=class_to_idx, transform=val_transform)
 
 
 def evaluate_loader(
@@ -118,16 +240,21 @@ def evaluate_loader(
     device: torch.device,
     positive_label: int,
     *,
+    dataset_name: str = "Eval",
     threshold: float | None = None,
     tune_threshold: bool = False,
     threshold_objective: str = "f1",
     min_positive_rate: float = DEFAULT_MIN_CLOSED_PREDICTION_RATE,
     max_positive_rate: float = DEFAULT_MAX_CLOSED_PREDICTION_RATE,
+    show_progress: bool = True,
 ) -> dict[str, float]:
     accumulator = ProbabilityAccumulator()
     model.eval()
+    iterator = dataloader
+    if show_progress:
+        iterator = tqdm(dataloader, total=len(dataloader), desc=dataset_name, unit="batch")
     with torch.no_grad():
-        for images, labels in dataloader:
+        for images, labels in iterator:
             images = images.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
             logits = model(images)
@@ -306,6 +433,8 @@ def main() -> None:
     args = parse_args()
     checkpoint = load_checkpoint(args.checkpoint)
     device = resolve_device(args.device)
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     model_config = checkpoint["model_config"]
     class_to_idx = checkpoint["class_to_idx"]
@@ -330,12 +459,20 @@ def main() -> None:
         label_smoothing=float(train_cfg.get("label_smoothing", 0.0)),
     )
 
-    _, clean_loader = create_loader(
+    clean_dataset = build_dataset(
         args.clean_root,
         class_to_idx=class_to_idx,
+        image_size=int(model_config["image_size"]),
+    )
+    clean_dataset, subset_manifest_rows, subset_class_counts = sample_balanced_subset(
+        clean_dataset,
+        max_total_samples=args.max_total_samples,
+        subset_seed=args.subset_seed,
+    )
+    clean_loader = create_loader(
+        clean_dataset,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
-        image_size=int(model_config["image_size"]),
     )
     clean_metrics = evaluate_loader(
         model,
@@ -343,33 +480,70 @@ def main() -> None:
         criterion,
         device,
         positive_label,
+        dataset_name="Clean",
         threshold=None if args.retune_threshold_on_clean else float(checkpoint.get("best_threshold", 0.5)),
         tune_threshold=args.retune_threshold_on_clean,
         threshold_objective=str(train_cfg.get("threshold_objective", "f1")),
         min_positive_rate=float(train_cfg.get("min_closed_prediction_rate", args.min_closed_prediction_rate)),
         max_positive_rate=float(train_cfg.get("max_closed_prediction_rate", args.max_closed_prediction_rate)),
+        show_progress=not args.no_progress,
     )
     threshold = float(clean_metrics["threshold"])
 
     rows = [
         {
             "dataset": "Clean",
-            "root": str(Path(args.clean_root).expanduser().resolve()),
+            "root": str(clean_dataset.root if clean_dataset.root is not None else Path(args.clean_root).expanduser().resolve()),
             **clean_metrics,
         }
     ]
 
     print(f"Evaluating on device: {device}")
     print(f"Classes: {class_to_idx}")
+    if args.max_total_samples > 0:
+        print(
+            "Using balanced subset with "
+            f"{sum(subset_class_counts.values())} samples total: {subset_class_counts}"
+        )
     print(format_classifier_metric_line("Clean", clean_metrics))
 
+    subset_manifest_path = output_dir / "subset_manifest.csv"
+    if subset_manifest_rows:
+        save_results_csv(subset_manifest_rows, subset_manifest_path)
+        print(f"Saved subset manifest to: {subset_manifest_path}")
+
+    clean_only_csv_rows = []
+    for row in rows:
+        csv_row = dict(row)
+        csv_row["confusion_matrix"] = np.asarray(csv_row["confusion_matrix"]).tolist()
+        clean_only_csv_rows.append(csv_row)
+    save_experiment_results_csv(rows, output_dir / "clean_only_experiment_results.csv")
+    save_results_csv(clean_only_csv_rows, output_dir / "clean_only_evaluation_results.csv")
+    clean_only_summary_lines = [
+        f"Using threshold={threshold:.2f} for the closed-eye class.",
+        f"Closed-eye recall on clean data: {clean_metrics['closed_recall']:.4f}.",
+    ]
+    if args.max_total_samples > 0:
+        clean_only_summary_lines.append(
+            f"Balanced subset used for evaluation: {sum(subset_class_counts.values())} samples total."
+        )
+        clean_only_summary_lines.append(f"Per-class subset counts: {subset_class_counts}.")
+    (output_dir / "clean_only_evaluation_summary.txt").write_text(
+        "\n".join(clean_only_summary_lines),
+        encoding="utf-8",
+    )
+
     if args.lowlight_root:
-        _, lowlight_loader = create_loader(
+        lowlight_dataset = build_dataset_from_manifest(
             args.lowlight_root,
+            manifest_rows=subset_manifest_rows,
             class_to_idx=class_to_idx,
+            image_size=int(model_config["image_size"]),
+        )
+        lowlight_loader = create_loader(
+            lowlight_dataset,
             batch_size=args.batch_size,
             num_workers=args.num_workers,
-            image_size=int(model_config["image_size"]),
         )
         lowlight_metrics = evaluate_loader(
             model,
@@ -377,22 +551,28 @@ def main() -> None:
             criterion,
             device,
             positive_label,
+            dataset_name="LowLight",
             threshold=threshold,
+            show_progress=not args.no_progress,
         )
         rows.append(
             {
                 "dataset": "Low-light",
-                "root": str(Path(args.lowlight_root).expanduser().resolve()),
+                "root": str(lowlight_dataset.root if lowlight_dataset.root is not None else Path(args.lowlight_root).expanduser().resolve()),
                 **lowlight_metrics,
             }
         )
         print(format_classifier_metric_line("LowLight", lowlight_metrics))
 
-    output_dir = Path(args.output_dir).expanduser().resolve()
     summary_lines = [
         f"Using threshold={threshold:.2f} for the closed-eye class.",
         f"Closed-eye recall on clean data: {clean_metrics['closed_recall']:.4f}.",
     ]
+    if args.max_total_samples > 0:
+        summary_lines.append(
+            f"Balanced subset used for evaluation: {sum(subset_class_counts.values())} samples total."
+        )
+        summary_lines.append(f"Per-class subset counts: {subset_class_counts}.")
     if len(rows) > 1:
         summary_lines.append(
             f"Closed-eye recall on low-light data: {rows[1]['closed_recall']:.4f}."
