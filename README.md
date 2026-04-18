@@ -143,7 +143,7 @@ Completed so far:
   - `materialized_split_subject_counts_subject_class_balanced_20k.csv`
 - **Phase 3 completed**: a reduced pilot training run was created from a subset of train subjects only, while the full validation split was kept for early evaluation. This pilot used a ResNet18 clean detector and wrote checkpoints under `task_driven_checkpoints/kaggle_v1/pilot_clean_detector_subject_class_balanced_20k_resnet18`.
 - The pilot clean run confirmed that the new Kaggle split is learnable with the current transfer-learning stack. On `val_clean_subject_class_balanced_20k`, the pilot detector reached `96.76%` accuracy / `96.78%` F1. On `test_clean_subject_class_balanced_20k`, it reached `91.94%` accuracy / `92.43%` F1, which is a healthy subject-wise generalization result for the first clean-only sanity check.
-- **Phase 4 active path**: the full clean detector notebook now targets all of `train_clean_subject_class_balanced_20k`, validates on `val_clean_subject_class_balanced_20k`, and evaluates on `test_clean_subject_class_balanced_20k`, with checkpoints stored under `task_driven_checkpoints/kaggle_v1/full_clean_detector_subject_class_balanced_20k_resnet18`.
+- **Phase 4 completed**: the full clean detector notebook now targets all of `train_clean_subject_class_balanced_20k`, validates on `val_clean_subject_class_balanced_20k`, and evaluates on `test_clean_subject_class_balanced_20k`, with checkpoints stored under `task_driven_checkpoints/kaggle_v1/full_clean_detector_subject_class_balanced_20k_resnet18`.
 - **Phase 5 completed / active low-light preset**: low-light generation for the Kaggle v1 split now uses a custom eye-crop-aware preset called `eye_mid` instead of the earlier harsher `realistic_dark` settings. The selected configuration is:
   - `gamma=1.75`
   - `brightness_factor=0.72`
@@ -154,12 +154,76 @@ Completed so far:
   - `motion_blur_kernel=0`
   - `motion_blur_angle=0.0`
   - `desaturation_factor=0.00`
-- The corresponding planned low-light roots are:
 - The corresponding Kaggle v1 low-light roots are:
   - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/train_lowlight_subject_class_balanced_20k_eye_mid`
   - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/val_lowlight_subject_class_balanced_20k_eye_mid`
   - `/content/drive/MyDrive/task_driven_video_pipeline/kaggle_v1/test_lowlight_subject_class_balanced_20k_eye_mid`
-- The next planned step is **Phase 6**: run the clean-vs-low-light baseline on the Kaggle v1 clean detector using `test_clean_subject_class_balanced_20k` and `test_lowlight_subject_class_balanced_20k_eye_mid` to measure the first true clean-to-low-light degradation gap on the new dataset.
+- **Phase 6 completed**: the clean-vs-low-light baseline was run on a balanced 5k subset of the Kaggle v1 test split using the full clean detector checkpoint and the `eye_mid` low-light root.
+- The Phase 6 benchmark used:
+  - `2500 open`
+  - `2500 closed`
+- Phase 6 results on `eval_clean_vs_lowlight_test_subject_class_balanced_20k_eye_mid_5k`:
+  - Clean: `92.56%` accuracy / `93.04%` F1
+  - Low-light (`eye_mid`): `89.60%` accuracy / `88.56%` F1
+  - Clean-to-low-light drop: `-2.96` accuracy points / `-4.48` F1 points
+  - Closed-eye recall: `99.44% -> 80.48%`
+- This makes `eye_mid` a moderate but scientifically respectable main low-light benchmark for Kaggle v1: the detector does not collapse, but low light causes a clear recall-oriented degradation on the safety-critical `closed` class.
+- **Phase 7 completed / Kaggle direction simplified**: the standalone Zero-DCE-style enhancement path was previewed and then dropped for the Kaggle v1 eye-crop track because it washed out grayscale eye structure and was not visually trustworthy for this dataset. The active Kaggle v1 plan is now detector-only: compare a clean detector, a low-light-only detector, and a mixed clean+low-light detector.
+- **Phase 7 completed / low-light-only detector**: a detector initialized from the clean checkpoint was fine-tuned on `train_lowlight_subject_class_balanced_20k_eye_mid`, validated on `val_lowlight_subject_class_balanced_20k_eye_mid`, and saved under `task_driven_checkpoints/kaggle_v1/detector_lowlight_subject_class_balanced_20k_eye_mid_resnet18/detector_lowlight_best.pt`.
+- The best low-light-only validation checkpoint reached `90.65%` accuracy / `90.77%` F1 on low-light validation, with `91.98%` closed-eye recall and tuned threshold `0.40`.
+- **Phase 8 completed**: the clean detector and low-light-only detector were compared on the same balanced 5k test subset for both `test_clean_subject_class_balanced_20k` and `test_lowlight_subject_class_balanced_20k_eye_mid`.
+- Phase 8 conclusion:
+  - the low-light-only detector helped on low-light recall-heavy metrics
+  - but it overfit badly to the degraded domain and collapsed on clean images
+  - this ruled it out as the final all-conditions model
+- **Phase 9 completed**: a mixed detector was then fine-tuned from the clean checkpoint on a combined clean + low-light training bundle and validated on a combined clean + low-light validation bundle. The best checkpoint was saved under `task_driven_checkpoints/kaggle_v1/detector_mixed_subject_class_balanced_20k_eye_mid_resnet18/detector_mixed_best.pt`.
+- The mixed detector validation results confirmed the intended tradeoff:
+  - clean validation: `97.58%` accuracy / `97.60%` F1
+  - low-light validation: `87.05%` accuracy / `87.23%` F1
+- **Phase 10 completed**: a final three-way comparison was run on the same balanced 5k held-out test subset for all three models.
+- Phase 10 results on `eval_final_model_compare_subject_class_balanced_20k_eye_mid_5k`:
+  - Clean detector:
+    - clean: `92.56%` accuracy / `93.04%` F1 / `99.44%` closed-eye recall
+    - low-light: `89.60%` accuracy / `88.56%` F1 / `80.48%` closed-eye recall
+  - Low-light-only detector:
+    - clean: `57.04%` accuracy / `69.95%` F1 / `100.00%` closed-eye recall
+    - low-light: `88.84%` accuracy / `89.87%` F1 / `99.00%` closed-eye recall
+  - Mixed detector:
+    - clean: `93.60%` accuracy / `93.90%` F1 / `98.60%` closed-eye recall
+    - low-light: `93.72%` accuracy / `94.02%` F1 / `98.72%` closed-eye recall
+- The current Kaggle v1 conclusion is therefore strong and simple:
+  - the clean detector degrades under low light
+  - the low-light-only detector overfits and loses clean-domain reliability
+  - the mixed detector is the current best overall model and the main result to carry forward
+- Relative to the clean detector on the same low-light test subset, the mixed detector improves low-light performance by `+4.12` accuracy points, `+5.46` F1 points, and `+18.24` closed-eye recall points, while also slightly improving clean-domain accuracy and F1.
+- **Phase 11 completed**: the same final three-way comparison was repeated on a second balanced 5k held-out subset with `subset_seed = 314`, saved under `eval_final_model_compare_subject_class_balanced_20k_eye_mid_5k_seed314`.
+- Phase 11 results on the second subset:
+  - Clean detector:
+    - clean: `92.16%` accuracy / `92.69%` F1 / `99.36%` closed-eye recall
+    - low-light: `88.86%` accuracy / `87.70%` F1 / `79.40%` closed-eye recall
+  - Low-light-only detector:
+    - clean: `56.72%` accuracy / `69.79%` F1 / `100.00%` closed-eye recall
+    - low-light: `88.70%` accuracy / `89.79%` F1 / `99.36%` closed-eye recall
+  - Mixed detector:
+    - clean: `93.44%` accuracy / `93.75%` F1 / `98.48%` closed-eye recall
+    - low-light: `93.60%` accuracy / `93.93%` F1 / `99.00%` closed-eye recall
+- The second subset confirms that the Phase 10 result was not a one-off. The ranking stayed the same:
+  - mixed detector best overall
+  - clean detector second
+  - low-light-only detector worst overall despite high low-light recall
+- Two-seed summary across subset seeds `42` and `314`:
+  - Clean detector: average F1 `90.50 ± 0.43`
+  - Low-light-only detector: average F1 `79.85 ± 0.08`
+  - Mixed detector: average F1 `93.90 ± 0.08`
+- Two-seed low-light summary:
+  - Clean detector: low-light F1 `88.13 ± 0.61`, closed-eye recall `79.94 ± 0.76`
+  - Low-light-only detector: low-light F1 `89.83 ± 0.06`, closed-eye recall `99.18 ± 0.25`
+  - Mixed detector: low-light F1 `93.98 ± 0.06`, closed-eye recall `98.86 ± 0.20`
+- The strengthened Kaggle v1 conclusion is now:
+  - low light consistently hurts the clean detector, especially on safety-critical closed-eye recall
+  - low-light-only fine-tuning consistently overfits and destroys clean-domain usability
+  - mixed-domain training consistently gives the best tradeoff and the best overall model across both tested subsets
+- The next immediate Kaggle v1 step is no longer another architecture change. The strongest next step is either a full held-out test evaluation or a few more subset seeds so the mixed-detector result can be reported with stronger variance estimates.
 - For faster and more restart-friendly Kaggle v1 baseline checks, [`evaluate_transfer_detector.py`](/Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/evaluate_transfer_detector.py) now supports a balanced subset cap via `--max-total-samples`, tqdm progress bars by default, saves a `subset_manifest.csv`, and writes clean-only partial outputs before the low-light pass starts.
 
 ## Project Flow
