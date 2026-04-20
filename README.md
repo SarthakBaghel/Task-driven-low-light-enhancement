@@ -1,7 +1,7 @@
 # Low-Light Eye-State Detection for Drowsiness Monitoring
 
 This repository is the cleaned college-submission version of the project.
-Older development-era files, duplicate experiments, and local working assets have been moved into `archive/` so that the root stays easy to review.
+Older development-era files, duplicate experiments, and local working assets were moved out of the main submission structure so that the root stays easy to review.
 
 The project studies one focused problem:
 
@@ -498,22 +498,17 @@ They document the project phase-by-phase:
 │   ├── clean_vs_lowlight_baseline_5k.csv
 │   ├── final_comparison_seed42.csv
 │   └── final_comparison_seed314.csv
-├── src/
-│   ├── dataset.py
-│   ├── dataloader.py
-│   ├── train_transfer_detector.py
-│   ├── evaluate_transfer_detector.py
-│   ├── generate_lowlight_dataset.py
-│   ├── low_light_simulator.py
-│   ├── inference_enhancer.py
-│   ├── losses/
-│   ├── models/
-│   └── utils/
-└── archive/
-    ├── legacy_root_scripts/
-    ├── legacy_workspace/
-    ├── reference/
-    └── submission_bundle_source/
+└── src/
+    ├── dataset.py
+    ├── dataloader.py
+    ├── train_transfer_detector.py
+    ├── evaluate_transfer_detector.py
+    ├── generate_lowlight_dataset.py
+    ├── low_light_simulator.py
+    ├── inference_enhancer.py
+    ├── losses/
+    ├── models/
+    └── utils/
 ```
 
 ## 17. What to Open First
@@ -526,8 +521,6 @@ If an examiner or reviewer opens this repository for the first time, the recomme
 4. `demo/` and `demo_outputs/` - simple demonstration files and ready-made output examples
 5. `src/` - core implementation files
 6. `notebooks/kaggle_v1/` - full experimental workflow
-7. `archive/` - older development material kept only for reference
-
 ## 18. How to Run the Demo
 
 The repository already includes a curated set of demo images in:
@@ -598,7 +591,11 @@ Recommended options:
 
 ### Option 1: Google Drive
 
-Upload the final checkpoints to Google Drive and place the shared link in:
+The recommended Google Drive folder for this submission is:
+
+- [Kaggle V1 checkpoints and experiment assets](https://drive.google.com/drive/folders/1wTXDbUqeb-YbshvXKpaajPKYjrDkD591?usp=sharing)
+
+The same link is also documented in:
 
 ```text
 checkpoints/README.md

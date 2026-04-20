@@ -7,9 +7,11 @@ This demo compares:
 
 on a small curated set of low-light eye images.
 
+It is designed for a quick viva or project presentation from the **repository root**.
+
 ## What Is Already Prepared
 
-The submission bundle already contains:
+The repository already contains:
 
 - a curated demo image folder in `sample_images/`
 - a demo script in `run_demo.py`
@@ -21,20 +23,26 @@ So you only need to place the checkpoints correctly and run the command.
 Place these files in:
 
 ```text
-../checkpoints/
+checkpoints/
 ```
 
 Expected names:
 
 ```text
-../checkpoints/clean_detector_best.pt
-../checkpoints/mixed_detector_best.pt
+checkpoints/clean_detector_best.pt
+checkpoints/mixed_detector_best.pt
 ```
 
 Optional:
 
 ```text
-../checkpoints/lowlight_detector_best.pt
+checkpoints/lowlight_detector_best.pt
+```
+
+If the files are not already present locally, use the Google Drive link documented in:
+
+```text
+checkpoints/README.md
 ```
 
 ## Exact Steps to Run the Demo
@@ -44,7 +52,7 @@ Optional:
 Open a terminal inside:
 
 ```text
-lowlight-eye-state-detection-submission/
+Task-driven low-light enhancement/
 ```
 
 ### Step 2
@@ -58,6 +66,17 @@ checkpoints/mixed_detector_best.pt
 
 ### Step 3
 
+Create and activate a virtual environment if needed:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+```
+
+### Step 4
+
 Run:
 
 ```bash
@@ -68,7 +87,7 @@ python demo/run_demo.py \
   --output-dir demo_outputs
 ```
 
-### Step 4
+### Step 5
 
 Open the generated files in:
 

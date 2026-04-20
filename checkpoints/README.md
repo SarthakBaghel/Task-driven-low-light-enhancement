@@ -1,62 +1,51 @@
-# Checkpoint Guide
+# Checkpoints
 
-This folder is a placeholder for the trained model checkpoints.
+The trained model binaries are intentionally **not** meant to be versioned in a normal GitHub repository.
 
-## Recommended Files
+## Recommended Submission Method
 
-Place these files here when preparing a final ZIP/demo bundle:
+Use the GitHub repository for code, paper, notebooks, and results, and provide the model files through Google Drive.
 
-```text
-clean_detector_best.pt
-mixed_detector_best.pt
-lowlight_detector_best.pt
-```
+Shared Drive folder:
 
-## Exact Final Checkpoints From This Project
+- [Kaggle V1 checkpoints and experiment assets](https://drive.google.com/drive/folders/1wTXDbUqeb-YbshvXKpaajPKYjrDkD591?usp=sharing)
 
-If you already downloaded the final checkpoints from the development workspace, these are the original files to use:
+## Final Files Expected in This Folder
+
+The demo and paper-related instructions expect these file names:
 
 ```text
-kaggle_v1_checkpoints/full_clean_detector_subject_class_balanced_20k_resnet18/kaggle_v1_clean_full_subject_class_balanced_20k_best.pt
-kaggle_v1_checkpoints/detector_mixed_subject_class_balanced_20k_eye_mid_resnet18/detector_mixed_best.pt
-kaggle_v1_checkpoints/detector_lowlight_subject_class_balanced_20k_eye_mid_resnet18/detector_lowlight_best.pt
+checkpoints/clean_detector_best.pt
+checkpoints/mixed_detector_best.pt
+checkpoints/lowlight_detector_best.pt   # optional for comparison only
 ```
 
-Recommended rename/copy mapping for this submission bundle:
+## Current Mapping Used in This Project
 
-```text
-kaggle_v1_clean_full_subject_class_balanced_20k_best.pt -> checkpoints/clean_detector_best.pt
-detector_mixed_best.pt -> checkpoints/mixed_detector_best.pt
-detector_lowlight_best.pt -> checkpoints/lowlight_detector_best.pt
-```
+- `clean_detector_best.pt`
+  - best clean baseline detector trained on `train_clean_subject_class_balanced_20k`
+- `mixed_detector_best.pt`
+  - final recommended detector trained on mixed clean + low-light data
+- `lowlight_detector_best.pt`
+  - optional comparison model trained only on low-light data
 
-## Best Way to Share Them
+## How an Examiner Can Use Them
 
-For GitHub submission:
-
-- keep this folder empty in the public repository,
-- upload the actual checkpoint files to Google Drive,
-- share the Google Drive link with the examiner,
-- mention that link in your report or email.
-
-## If You Are Submitting a ZIP
-
-Before zipping the project locally, copy the checkpoint files into this folder so the demo runs directly.
-
-Example local copy commands from the downloaded root project:
+1. Download the checkpoints from the Google Drive folder.
+2. Place the `.pt` files into this `checkpoints/` folder using the expected names above.
+3. Run the demo from the repository root:
 
 ```bash
-cp ../kaggle_v1_checkpoints/full_clean_detector_subject_class_balanced_20k_resnet18/kaggle_v1_clean_full_subject_class_balanced_20k_best.pt checkpoints/clean_detector_best.pt
-cp ../kaggle_v1_checkpoints/detector_mixed_subject_class_balanced_20k_eye_mid_resnet18/detector_mixed_best.pt checkpoints/mixed_detector_best.pt
-cp ../kaggle_v1_checkpoints/detector_lowlight_subject_class_balanced_20k_eye_mid_resnet18/detector_lowlight_best.pt checkpoints/lowlight_detector_best.pt
-```
-
-Example demo command:
-
-```bash
-python demo/run_demo.py \
+python3 demo/run_demo.py \
   --clean-checkpoint checkpoints/clean_detector_best.pt \
   --mixed-checkpoint checkpoints/mixed_detector_best.pt \
   --image-dir demo/sample_images \
   --output-dir demo_outputs
 ```
+
+## Why They Are Shared Separately
+
+Checkpoint files are large and can make a GitHub submission unnecessarily heavy. For a college submission, the most practical setup is:
+
+- GitHub repository for the code and documentation
+- Google Drive folder for the trained model binaries

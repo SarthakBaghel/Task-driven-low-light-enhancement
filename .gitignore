@@ -38,16 +38,5 @@ checkpoints/*.pth
 checkpoints/*.ckpt
 checkpoints/*.onnx
 
-# Ignore archived local-only heavy assets while keeping the archive structure
-archive/legacy_workspace/__pycache__/
-archive/legacy_workspace/artifacts/
-archive/legacy_workspace/data/
-archive/legacy_workspace/kaggle_v1/
-archive/legacy_workspace/kaggle_v1 2/
-archive/legacy_workspace/kaggle_v1_checkpoints/
-archive/submission_bundle_source/.venv/
-archive/submission_bundle_source/checkpoints/*.pt
-archive/submission_bundle_source/checkpoints/*.pth
-archive/submission_bundle_source/checkpoints/*.ckpt
-archive/submission_bundle_source/checkpoints/*.onnx
-archive/reference/visible_cache_cleanup/
+# Keep the archive local-only
+archive/
