@@ -1,7 +1,6 @@
 # Low-Light Eye-State Detection for Drowsiness Monitoring
 
 This repository is the cleaned college-submission version of the project.
-Older development-era files, duplicate experiments, and local working assets have been moved into `archive/` so that the root stays easy to review.
 
 The project studies one focused problem:
 
@@ -468,10 +467,10 @@ They document the project phase-by-phase:
 - `phase10.ipynb` - first final 5k comparison
 - `phase11.ipynb` - second final 5k comparison
 
-## 16. Repository Structure
+## 16. Submission Folder Structure
 
 ```text
-.
+lowlight-eye-state-detection-submission/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
@@ -481,7 +480,6 @@ They document the project phase-by-phase:
 │   ├── README.md
 │   ├── run_demo.py
 │   └── sample_images/
-├── demo_outputs/
 ├── docs/
 │   ├── IMPLEMENTATION_DETAILS.md
 │   └── GITHUB_SETUP.md
@@ -498,22 +496,17 @@ They document the project phase-by-phase:
 │   ├── clean_vs_lowlight_baseline_5k.csv
 │   ├── final_comparison_seed42.csv
 │   └── final_comparison_seed314.csv
-├── src/
-│   ├── dataset.py
-│   ├── dataloader.py
-│   ├── train_transfer_detector.py
-│   ├── evaluate_transfer_detector.py
-│   ├── generate_lowlight_dataset.py
-│   ├── low_light_simulator.py
-│   ├── inference_enhancer.py
-│   ├── losses/
-│   ├── models/
-│   └── utils/
-└── archive/
-    ├── legacy_root_scripts/
-    ├── legacy_workspace/
-    ├── reference/
-    └── submission_bundle_source/
+└── src/
+    ├── dataset.py
+    ├── dataloader.py
+    ├── train_transfer_detector.py
+    ├── evaluate_transfer_detector.py
+    ├── generate_lowlight_dataset.py
+    ├── low_light_simulator.py
+    ├── inference_enhancer.py
+    ├── losses/
+    ├── models/
+    └── utils/
 ```
 
 ## 17. What to Open First
@@ -523,10 +516,9 @@ If an examiner or reviewer opens this repository for the first time, the recomme
 1. `README.md` - project overview and final result
 2. `results/` - final exported tables used in the report
 3. `paper/` - draft paper, figures, and viva script
-4. `demo/` and `demo_outputs/` - simple demonstration files and ready-made output examples
+4. `demo/` - simple demonstration files
 5. `src/` - core implementation files
 6. `notebooks/kaggle_v1/` - full experimental workflow
-7. `archive/` - older development material kept only for reference
 
 ## 18. How to Run the Demo
 

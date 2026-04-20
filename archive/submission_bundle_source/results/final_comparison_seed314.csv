@@ -1,0 +1,4 @@
+Model,Clean Accuracy,Clean F1,Clean Closed Recall,Low-light Accuracy,Low-light F1,Low-light Closed Recall,Avg F1
+Clean detector,92.16,92.69,99.36,88.86,87.7,79.4,90.19
+Low-light detector,56.72,69.79,100.0,88.7,89.79,99.36,79.79
+Mixed detector,93.44,93.75,98.48,93.6,93.93,99.0,93.84

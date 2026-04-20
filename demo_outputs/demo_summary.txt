@@ -1,0 +1,9 @@
+Demo Summary
+Device: cpu
+Images evaluated: 8
+Labeled images: 8
+Clean detector correct: 6/8
+Mixed detector correct: 8/8
+Recovered by mixed detector: 2
+Predictions CSV: /Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/lowlight-eye-state-detection-submission/demo_outputs/predictions.csv
+Contact sheet: /Users/sarthakbaghel/Documents/Projects/Task-driven low-light enhancement/lowlight-eye-state-detection-submission/demo_outputs/demo_contact_sheet.png
