@@ -8,7 +8,7 @@ Use the GitHub repository for code, paper, notebooks, and results, and provide t
 
 Shared Drive folder:
 
-- [Kaggle V1 checkpoints and experiment assets](https://drive.google.com/drive/folders/1wTXDbUqeb-YbshvXKpaajPKYjrDkD591?usp=sharing)
+- [Kaggle V1 checkpoints and experiment assets](https://drive.google.com/drive/folders/1TaIUtn7WlPQCqN11l_nM7N4b0PR1s2Qp?usp=sharing)
 
 ## Final Files Expected in This Folder
 
